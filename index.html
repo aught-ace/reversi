@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8">
+        <meta
+            name="viewport"
+            content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0"
+        >
+        <title>カラフルリバーシ 1.0.0</title>
+	    <link rel="icon" href="icon.png">
+        <style>
+
+/* 横長 */
+@media (min-aspect-ratio: 64/96)
+{
+    #main
+    {
+        width: calc(100svh * (64 / 96));
+        height: 100svh;
+        left: calc(50svw - 100svh * (64 / 96) / 2);
+        top: 0;
+        position: fixed;
+        font-size: calc(100svh / 32);
+    }
+}
+
+/* 縦長 */
+@media (max-aspect-ratio: 64/96)
+{
+    #main
+    {
+        width: 100svw;
+        height: calc(100svw * (96 / 64));
+        left: 0;
+        top: calc(50svh - 50svw * (96 / 64));
+        position: fixed;
+        font-size: calc(100svw * (96 / 64) / 32);
+    }
+}
+
+#main
+{
+    overflow: hidden;
+}
+
+canvas {
+    image-rendering: pixelated;
+    border-radius: 0.5em;
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.none
+{
+    display: none;
+}
+
+body
+{
+    background-color: #FFF;
+    color: #000;
+    left: 0;
+    right: 0;
+    position: fixed;
+}
+
+body, html
+{
+    width: 100svw;
+    height: 100svh;
+    overflow: none;
+    overscroll-behavior-y: none;
+}
+
+*
+{
+    margin: 0;
+    padding: 0;
+    font-family: sans-serif;
+    line-height: 1em;
+    box-sizing: border-box;
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+    -moz-touch-callout:none;
+    -webkit-user-select:none;
+    -moz-user-select:none;
+    user-select:none;
+}
+
+        </style>
+    </head>
+    <body>
+        <div id="main">
+            <canvas id="player-b" width="32" height="8"></canvas>
+            <canvas id="screen" width="64" height="64"></canvas>
+            <canvas id="player-a" width="32" height="8"></canvas>
+        </div>
+        <img id="sprite" src="./sprite.png" class="none">
+
+        <script defer>'use strict'
+const screenCanvas = document.querySelector('#screen')
+const playerACanvas = document.querySelector('#player-a')
+const playerBCanvas = document.querySelector('#player-b')
+const body = document.body
+const sprite = document.querySelector('#sprite')
+
+const context = {
+    screen: screenCanvas.getContext('2d'),
+    a: playerACanvas.getContext('2d'),
+    b: playerBCanvas.getContext('2d'),
+}
+
+// 音声
+let audioContext
+let oscNode = []
+let gainNode = []
+
+// 周波数計算
+const note = []
+const nextFreq = Math.pow(2, 1 / 12)
+let f = 55
+for(let n = 0; n < 12 * 8; n++){
+    note[n] = f
+    f *= nextFreq
+}
+
+// 音声開始
+const audioStart = () =>
+{
+    if(audioContext != undefined) return
+
+    audioContext = new AudioContext()
+    if (audioContext.state === 'suspended') audioContext.resume()
+
+    for(let p = 0; p < 2; p++) {
+        oscNode[p] = []
+        gainNode[p] = new GainNode(audioContext)
+        gainNode[p].gain.value = 0
+        for(let n = 0; n < 4; n++) {
+
+            oscNode[p][n] = new OscillatorNode(audioContext)
+            const real = new Float32Array(9)
+            const imag = new Float32Array(9)
+            real[0] = 0
+            real[1] = 1
+            real[2] = 1
+            real[3] = 1
+            real[4] = 1
+            real[5] = 1
+            real[6] = 1
+            real[7] = 1
+            real[8] = 1
+            imag[0] = 0
+            imag[1] = 0
+            imag[2] = 0
+            imag[3] = 0
+            imag[4] = 0
+            imag[5] = 0
+            imag[6] = 0
+            imag[7] = 0
+            imag[8] = 0
+            const wave = audioContext.createPeriodicWave(real, imag)
+            oscNode[p][n].setPeriodicWave(wave)
+        }
+    }
+
+    for(let p = 0; p < 2; p++) {
+        for(let n = 0; n < 4; n++) {
+            let o
+            if(p === 0 && n === 0) o = 12 * 3 + 0
+            if(p === 0 && n === 1) o = 12 * 3 + 3
+            if(p === 0 && n === 2) o = 12 * 3 + 7
+            if(p === 0 && n === 3) o = 12 * 3 + 10
+            if(p === 1 && n === 0) o = 12 * 4 + 0
+            if(p === 1 && n === 1) o = 12 * 4 + 4
+            if(p === 1 && n === 2) o = 12 * 4 + 7
+            if(p === 1 && n === 3) o = 12 * 4 + 11
+            oscNode[p][n].frequency.value = note[o]
+        }
+    }
+
+    for(let p = 0; p < 2; p++) {
+        for(let n = 0; n < 4; n++) {
+            oscNode[p][n].connect(gainNode[p]).connect(audioContext.destination)
+            oscNode[p][n].start(0)
+        }
+    }
+
+    for(let p = 0; p < 2; p++) {
+        gainNode[p].gain.linearRampToValueAtTime(0, audioContext.currentTime)
+        gainNode[p].gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.001)
+        gainNode[p].gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.02 - 0.001)
+        gainNode[p].gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.02)
+    }
+}
+
+
+// 音声再生
+const sound = (pp, o) =>
+{
+    let p = 0
+    if(pp === 'b') p = 1
+
+    for(let n = 0; n < 4; n++) {
+        oscNode[p][n].frequency.value = note[player[pp].sound[n] + 12 * o + 3]
+    }
+
+    gainNode[p].gain.value = 0
+    gainNode[p].gain.linearRampToValueAtTime(0, audioContext.currentTime)
+    gainNode[p].gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.001)
+    gainNode[p].gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.02 - 0.001)
+    gainNode[p].gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.02)
+}
+
+// キャラ描画
+const drawChar = (color, light, dstContext, srcX, srcY, dstX, dstY) => {
+
+    if(dstContext === 'b') {
+        dstX = 3 - dstX
+        dstY = 0 - dstY
+    }
+
+    context[dstContext].drawImage(colorSprite[color][light],
+        Math.floor(srcX * 8),
+        Math.floor(srcY * 8),
+        8,
+        8,
+        Math.floor(dstX * 8),
+        Math.floor(dstY * 8),
+        8,
+        8)
+}
+
+// 背景描画
+const drawBack = (dstContext, red, green, blue, alpha) => {
+    context[dstContext].fillStyle = 'rgb(' + red + ' ' + green + ' ' +  blue + '/' +  alpha + ')'
+    context[dstContext].fillRect(0, 0, 64, 64)
+}
+
+// ゲームの変数
+let player = {
+    a: {
+        state: 'title',
+        shape: null,
+        color: null,
+        sound: [0, 3, 7, 10],
+    },
+    b: {
+        state: 'title',
+        shape: null,
+        color: null,
+        sound: [3, 7, 10, 14],
+    },
+}
+let board = {}
+let animBoard = {}
+let turn = 'a'
+let end = {}
+let count = {}
+
+// ゲーム初期化
+const gameInit = () => {
+    player.b.state = 'title'
+    player.b.shape = null
+    player.b.color = null
+    player.a.state = 'title'
+    player.a.shape = null
+    player.a.color = null
+    board = {
+        // 現在の盤面
+        player:
+        [
+            ['n', 'n', 'n', 'n', 'n', 'n', 'n', 'n',],
+            ['n', 'n', 'n', 'n', 'n', 'n', 'n', 'n',],
+            ['n', 'n', 'n', 'n', 'n', 'n', 'n', 'n',],
+            ['n', 'n', 'n', 'a', 'b', 'n', 'n', 'n',],
+            ['n', 'n', 'n', 'b', 'a', 'n', 'n', 'n',],
+            ['n', 'n', 'n', 'n', 'n', 'n', 'n', 'n',],
+            ['n', 'n', 'n', 'n', 'n', 'n', 'n', 'n',],
+            ['n', 'n', 'n', 'n', 'n', 'n', 'n', 'n',],
+        ],
+        // そこにおけるかどうかのフラグ兼めくれる数
+        a:
+        [
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+        ],
+        b:
+        [
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+        ],
+        toGet:
+        [
+            ['n', 'n', 'n', 'n', 'n', 'n', 'n', 'n',],
+            ['n', 'n', 'n', 'n', 'n', 'n', 'n', 'n',],
+            ['n', 'n', 'n', 'n', 'n', 'n', 'n', 'n',],
+            ['n', 'n', 'n', 'n', 'n', 'n', 'n', 'n',],
+            ['n', 'n', 'n', 'n', 'n', 'n', 'n', 'n',],
+            ['n', 'n', 'n', 'n', 'n', 'n', 'n', 'n',],
+            ['n', 'n', 'n', 'n', 'n', 'n', 'n', 'n',],
+            ['n', 'n', 'n', 'n', 'n', 'n', 'n', 'n',],
+        ],
+        // 置いた位置と置いているか
+        x: -1,
+        y: -1,
+        put: false,
+        ableToPut: {
+            b: true,
+            a: true,
+        },
+    }
+    end = {
+        x: -1,
+        y: -1,
+        result: null,
+        rMax: 0,
+        frame: -1,
+        prevFrame: -1,
+    }
+    count = {
+        b: 0,
+        a: 0,
+        winner: 'n',
+        frame: -1,
+        prevFrame: -1,
+    }
+    turn = 'a'
+
+    redraw = true
+}
+
+// 色の配列
+const colorArray = [
+    [
+        [51, 0, 0, 255],
+        [255, 0, 0, 255],
+        [255, 204, 204, 255],
+    ],
+    [
+        [51, 51, 0, 255],
+        [255, 255, 0, 255],
+        [255, 255, 204, 255],
+    ],
+    [
+        [0, 51, 0, 255],
+        [0, 255, 0, 255],
+        [204, 255, 204, 255],
+    ],
+    [
+        [0, 51, 51, 255],
+        [0, 255, 255, 255],
+        [204, 255, 255, 255],
+    ],
+    [
+        [0, 0, 51, 255],
+        [0, 0, 255, 255],
+        [204, 204, 255, 255],
+    ],
+    [
+        [51, 0, 51, 255],
+        [255, 0, 255, 255],
+        [255, 204, 255, 255],
+    ],
+]
+
+// スプライト画像の配列
+const colorSprite = [
+    [
+        document.createElement('img'),
+        document.createElement('img'),
+        document.createElement('img'),
+    ],
+    [
+        document.createElement('img'),
+        document.createElement('img'),
+        document.createElement('img'),
+    ],
+    [
+        document.createElement('img'),
+        document.createElement('img'),
+        document.createElement('img'),
+    ],
+    [
+        document.createElement('img'),
+        document.createElement('img'),
+        document.createElement('img'),
+    ],
+    [
+        document.createElement('img'),
+        document.createElement('img'),
+        document.createElement('img'),
+    ],
+    [
+        document.createElement('img'),
+        document.createElement('img'),
+        document.createElement('img'),
+    ],
+]
+
+// 描画関数
+
+const drawStaticBoard = () => {
+    let f = [] // 表示可能フラグ
+    f.b = true
+    f.a = true
+    if(
+        player.b.state === 'title' ||
+        player.b.state === 'select'
+    ) f.b = false
+    if(
+        player.a.state === 'title' ||
+        player.a.state === 'select'
+    ) f.a = false
+    for(let y = 0; y < 8; y++) {
+        for(let x = 0; x < 8; x++) {
+            const p = board.player[y][x]
+            const t = board.toGet[y][x]
+
+            // 明るい駒描画
+            if(t !== 'n') {
+                // 置いた駒
+                if(p === 'n') {
+                    drawChar(player[t].color, 2, 'screen',
+                        4,
+                        player[t].shape,
+                        x,
+                        y
+                    )
+                    continue
+                } else
+                // 取れる駒
+                {
+                    drawChar(player[t].color, 2, 'screen',
+                        4,
+                        player[p].shape,
+                        x,
+                        y
+                    )
+                    continue
+                }
+            } else
+            // 駒描画
+            if(p !== 'n') {
+                if(!f[p]) continue
+                drawChar(player[p].color, 1, 'screen',
+                    4,
+                    player[p].shape,
+                    x,
+                    y
+                )
+            }
+            // 置ける場所の薄い影描画
+            else {
+                if(p !== 'n') continue
+                if(board[turn][y][x] <= 0) continue
+
+                drawChar(player[turn].color, 0, 'screen',
+                    4,
+                    player[turn].shape,
+                    x,
+                    y
+                )
+            }
+        }
+    }
+}
+
+const drawDynamicBoard = () => {
+    const frame = Math.floor(end.frame)
+    const px = end.x
+    const py = end.y
+    const r = end.result
+    const p = turn
+    const q = (p === 'a')? 'b' : 'a'
+
+    // 既にある駒描画
+    for(let y = 0; y < 8; y++) {
+        for(let x = 0; x < 8; x++) {
+            const p = board.player[y][x]
+            const t = board.toGet[y][x]
+            if(p === 'n') continue
+
+            if(t === 'n') {
+                drawChar(player[p].color, 1, 'screen',
+                    4,
+                    player[p].shape,
+                    x,
+                    y
+                )
+            }
+        }
+    }
+
+    // 今置いた駒描画
+    drawChar(player[p].color, 1, 'screen',
+        4,
+        player[p].shape,
+        px,
+        py
+    )
+
+    // 消えて出るアニメーションで取った駒を描画
+    for(let vy = -1; vy <= 1; vy++) {
+        for(let vx = -1; vx <= 1; vx++) {
+            if(vy === 0 && vx === 0) continue
+            for(let v = 1; v <= end.result[vy][vx]; v++) {
+                const x = px + vx * v
+                const y = py + vy * v
+                const f = Math.max(0, Math.min(frame - v + 1, 8))
+                if(f < 4) {
+                    drawChar(player[p].color, 2, 'screen',
+                        4 + f,
+                        player[q].shape,
+                        x,
+                        y
+                    )
+                } else
+                if(f < 8) {
+                    const bf = f - 3
+                    drawChar(player[p].color, 2, 'screen',
+                        bf,
+                        player[p].shape,
+                        x,
+                        y
+                    )
+                } else {
+                    drawChar(player[p].color, 1, 'screen',
+                        4,
+                        player[p].shape,
+                        x,
+                        y
+                    )
+                }
+            }
+        }
+    }
+}
+
+const drawCount = (f) => {
+    f = Math.floor(f)
+    for (let b = 0; b < Math.min(f, count.b); b++) {
+        const x = Math.floor(b % 8)
+        const y = Math.floor(b / 8)
+        let s = f - b + 1
+        if(s < 8) drawChar(player.b.color, 1, 'screen',
+            s,
+            player.b.shape,
+            x,
+            y
+        )
+        if(f < count.b + 8) sound('b', 2)
+    }
+    for (let a = 0; a < Math.min(f, count.a); a++) {
+        const x = 7 - Math.floor(a % 8)
+        const y = 7 - Math.floor(a / 8)
+        let s = f - a + 1
+        if(s < 8) drawChar(player.a.color, 1, 'screen',
+            s,
+            player.a.shape,
+            x,
+            y
+        )
+        if(f < count.a + 8) sound('a', 2)
+    }
+}
+
+const drawResult = () => {
+    for (let b = 0; b < count.b; b++) {
+        const x = Math.floor(b % 8)
+        const y = Math.floor(b / 8)
+        drawChar(player.b.color, 1, 'screen',
+            4,
+            player.b.shape,
+            x,
+            y
+        )
+    }
+    for (let a = 0; a < count.a; a++) {
+        const x = 7 - Math.floor(a % 8)
+        const y = 7 - Math.floor(a / 8)
+        drawChar(player.a.color, 1, 'screen',
+            4,
+            player.a.shape,
+            x,
+            y
+        )
+    }
+}
+
+const drawPut = (p) => {
+    if(turn !== p) return
+
+    drawChar(player[p].color, 1, p,
+        4,
+        player[p].shape,
+        1.5,
+        0
+    )
+}
+
+const drawEnd = (p) => {
+    if(turn !== p) return
+
+    drawChar(player[p].color, 0, p,
+        4,
+        player[p].shape,
+        1.5,
+        0
+    )
+    sound(p, 4)
+}
+
+const drawSelect = (p) => {
+    drawChar(player[p].color, 1, p,
+        4,
+        player[p].shape,
+        1.5,
+        0
+    )
+}
+
+// 描画
+const draw = () =>
+{
+    redraw = false
+
+    // スクリーンの背景
+    context.screen.globalCompositeOperation = 'source-over'
+    if(player.a.state !== 'title') drawBack('screen', 0, 0, 0, '100%')
+    else drawBack('screen', 51, 51, 51, '100%')
+
+    // 加算合成でキャラを描く
+    context.screen.globalCompositeOperation = 'lighter'
+
+    // プレイヤー面の背景
+    drawBack('a', 255, 255, 255, '100%')
+    drawBack('b', 255, 255, 255, '100%')
+
+    // コマの形と色を選択する画面
+    if(player.b.state === 'select') drawSelect('b')
+    if(player.a.state === 'select') drawSelect('a')
+
+    // コマを置く
+    if(player.b.state === 'put') drawPut('b')
+    if(player.a.state === 'put') drawPut('a')
+
+    // コマを置いて終了する
+    if(player.b.state === 'end') drawEnd('b')
+    if(player.a.state === 'end') drawEnd('a')
+
+    // 盤面
+    if(
+        player.b.state !== 'title' &&
+        player.a.state !== 'title'
+    ) {
+        if(end.frame < 0) drawStaticBoard()
+        else drawDynamicBoard()
+    }
+    
+    // 最後に数える
+    if(
+        player.b.state === 'count' &&
+        player.a.state === 'count'
+    ) {
+        if (count.frame >= 0) {
+            drawCount(count.frame)
+        }
+    }
+    
+    // 結果発表
+    if(
+        player.b.state === 'result' &&
+        player.a.state === 'result'
+    ) {
+        drawResult()
+        sound(count.winner, 4)
+    }
+}
+
+// フレームごとの処理
+let prevTimestamp = 0
+let redraw = false
+const animationFrame = (timestamp) =>
+{
+    // 次回のフレームを予約
+    requestAnimationFrame(animationFrame)
+
+    // このフレームの時刻など
+    if (!prevTimestamp) prevTimestamp = timestamp
+    const deltaTime = (timestamp - prevTimestamp) / 1000
+
+    // ゲーム開始
+    if(
+        player.a.state === 'start' &&
+        player.b.state === 'start'
+    ) {
+        player.a.state = 'put'
+        player.b.state = 'wait'
+        calcToPut()
+    }
+
+    // アニメーションしてから相手のターンへ渡す
+    if (end.frame >= 0) {
+        end.prevFrame = end.frame
+        end.frame += 12 * deltaTime
+        if(Math.floor(end.frame) !== Math.floor(end.prevFrame)) {
+            sound(turn, 2)
+            redraw = true
+        }
+    }
+    const m = 7 + end.rMax
+    if (end.frame >= m) {
+        let p = turn
+        let q = (p === 'a')? 'b' : 'a'
+        // 次のターン
+        if(
+            board.ableToPut[p] ||
+            board.ableToPut[q]
+        ) {
+            if(board.ableToPut[q]) {
+                const t = p
+                p = q
+                q = t
+            }
+            player[p].state = 'put'
+            player[q].state = 'wait'
+            turn = p
+            resetToGet()
+        // どちらももう置けない
+        } else {
+            player[p].state = 'count'
+            player[q].state = 'count'
+            playerCount()
+            count.frame = 0
+        }
+        end.frame = -1
+        end.prevFrame = -1
+    }
+    if (count.frame >= 0) {
+        count.prevFrame = count.frame
+        count.frame += 12 * deltaTime
+        if(Math.floor(count.frame) !== Math.floor(count.prevFrame)) {
+            redraw = true
+        }
+    }
+    if (count.frame >= Math.max(count.a, count.b) + 7) {
+        count.frame = -1
+        count.prevFrame = -1
+        player.b.state = 'result'
+        player.a.state = 'result'
+    }
+
+    if(redraw) draw()
+
+    prevTimestamp = timestamp // 現在時刻を前回の現在時刻とする
+}
+
+// 置けるかどうかと8方向に取れる個数を計算
+const calcToPut = () => {
+    board.ableToPut.a = false
+    board.ableToPut.b = false
+    for(let y = 0; y < 8; y++){
+        for(let x = 0; x < 8; x++){
+            board.b[y][x] = 0
+            board.a[y][x] = 0
+
+            if(board.player[y][x] !== 'n') continue
+
+            for(let p in player) {
+                let q = (p === 'a')? 'b' : 'a'
+                let on = 0 // めくれる数
+
+                for(let vy = -1; vy <= 1; vy++){
+                    for(let vx = -1; vx <= 1; vx++){
+                        if(vx === 0 && vy === 0) continue
+                        let n = 0
+                        for(let v = 1; v <= 8; v++) {
+                            const ox = x + vx * v
+                            const oy = y + vy * v
+                            if(ox < 0 || 8 <= ox || oy < 0 || 8 <= oy) {
+                                n = 0
+                                break
+                            }
+
+                            const o = board.player[oy][ox]
+                            if(o === 'n') {
+                                n = 0
+                                break
+                            }
+                            if(o === p) break
+                            if(o === q) n++
+                        }
+                        on += n
+                    }
+                }
+                if (on > 0) {
+                    board[p][y][x] = on
+                    board.ableToPut[p] = true
+                }
+            }
+        }
+    }
+}
+
+// 最後に駒を数える関数
+const playerCount = () => {
+    for(let y = 0; y < 8; y++) {
+        for(let x = 0; x < 8; x++) {
+            if(board.player[y][x] === 'b') count.b++
+            if(board.player[y][x] === 'a') count.a++
+            board.player[y][x] = 'n'
+            board.toGet[y][x] = 'n'
+        }
+    }
+    count.winner = 'n'
+    if(count.a > count.b) count.winner = 'a'
+    if(count.a < count.b) count.winner = 'b'
+}
+
+// めくれる駒を返す関数
+const calcToGet = (x, y) => {
+    let p = turn
+    let q = (p === 'a')? 'b' : 'a'
+
+    const r = []
+
+    for(let vy = -1; vy <= 1; vy++){
+        r[vy] = []
+        for(let vx = -1; vx <= 1; vx++){
+            if(vx === 0 && vy === 0) continue
+            r[vy][vx] = 0
+            let n = 0
+            for(let v = 1; v <= 8; v++) {
+                const ox = x + vx * v
+                const oy = y + vy * v
+                if(ox < 0 || 8 <= ox || oy < 0 || 8 <= oy) {
+                    n = 0
+                    break
+                }
+
+                const o = board.player[oy][ox]
+                if(o === 'n') {
+                    n = 0
+                    break
+                }
+                if(o === p) break
+                if(o === q) n++
+            }
+            r[vy][vx] = n
+        }
+    }
+
+    return r
+}
+    
+// プレイヤーの番終了
+const playerEnd = () => {
+    let p = turn
+    let q = (p === 'a')? 'b' : 'a'
+    let x = board.x
+    let y = board.y
+    board.put = false
+
+    const r = calcToGet(x, y)
+    let rMax = 0
+    for(let vy = -1; vy <= 1; vy++){
+        for(let vx = -1; vx <= 1; vx++){
+            if(vx === 0 && vy === 0) continue
+            for(let v = 0; v <= r[vy][vx]; v++) {
+                const ox = x + vx * v
+                const oy = y + vy * v
+                board.player[oy][ox] = p
+            }
+            const rt = r[vy][vx]
+            if(rMax < rt) rMax = rt
+        }
+    }
+
+    end.x = x
+    end.y = y
+    end.frame = 0
+    end.result = r
+    end.rMax = rMax
+}
+
+// これから取る駒の表示をリセット
+const resetToGet = () => {
+    for(let y = 0; y < 8; y++){
+        for(let x = 0; x < 8; x++){
+            board.toGet[y][x] = 'n'
+        }
+    }
+}
+
+// プレイヤーの駒を置いた
+const playerPut = (p, x, y) => {
+    if(
+        player.a.state === 'title' ||
+        player.a.state === 'select' ||
+        player.a.state === 'decide' ||
+        player.b.state === 'title' ||
+        player.b.state === 'select' ||
+        player.b.state === 'decide'
+    ) return
+    let q = (p === 'a')? 'b' : 'a'
+
+    if(board.player[y][x] !== 'n') return
+    if(board[p][y][x] <= 0) {
+        return
+    }
+
+    resetToGet()
+
+    board.x = x
+    board.y = y
+    board.put = true
+
+    const r = calcToGet(x, y)
+    
+    for(let vy = -1; vy <= 1; vy++){
+        for(let vx = -1; vx <= 1; vx++){
+            if(vx === 0 && vy === 0) continue
+            for(let v = 0; v <= r[vy][vx]; v++) {
+                const ox = x + vx * v
+                const oy = y + vy * v
+                board.toGet[oy][ox] = p
+            }
+        }
+    }
+
+    redraw = true
+    player[p].state = 'end'
+}
+
+const palyerSelect = (p) => {
+    const q = (p === 'a')? 'b' : 'a'
+    let s = Math.floor(Math.random() * 7)
+    let c = Math.floor(Math.random() * 5)
+    if (s >= player[q].shape) s++
+    if (c >= player[q].color) c++
+    player[p].shape = s
+    player[p].color = c
+
+    const real = new Float32Array(9)
+    const imag = new Float32Array(9)
+    real[0] = 0
+    imag[0] = 0
+    for(let i = 0; i < 8; i++) {
+        real[i + 1] = (i + 1 < s + 2)? 1 : 0 
+        imag[i + 1] = 0
+    }
+    const wave = audioContext.createPeriodicWave(real, imag)
+    let pn = (p === 'a')? 0 : 1
+    for(let n = 0; n < 4; n++) oscNode[pn][n].setPeriodicWave(wave)
+
+    const noteArray = [
+        0,
+        2,
+        4,
+        5,
+        7,
+        9,
+        11,
+        12,
+        14,
+        16,
+        17,
+        19,
+        21,
+        23,
+    ]
+
+    player[p].sound[0] = noteArray[c + 0]
+    player[p].sound[1] = noteArray[c + 1]
+    player[p].sound[2] = noteArray[c + 2]
+    player[p].sound[3] = noteArray[c + 3]
+
+    sound(p, 3)
+}
+
+// プレイヤーのタッチ
+const touchPlayer = (p, x, y) => {
+    const fx = Math.floor(x)
+    const fy = Math.floor(y)
+    const q = p === 'a'? 'b' : 'a'
+
+    // 駒決定
+    if (player[p].state === 'select' &&
+        1.5 <= x && x < 2.5 &&
+        0 <= y && y < 1) {
+        player[p].state = 'start'
+        redraw = true
+    } else
+
+    // 駒選択
+    if(player[p].state === 'select') {
+        palyerSelect(p)
+        redraw = true
+    } else
+
+    // 番終了
+    if (player[p].state === 'end' &&
+        1.5 <= x && x < 2.5 &&
+        0 <= y && y < 1) {
+        playerEnd()
+        player[p].state = 'animation'
+        calcToPut()
+        redraw = true
+    } else
+
+    // 置きキャンセル
+    if (player[p].state === 'end') {
+        resetToGet()
+        player[p].state = 'put'
+        redraw = true
+    }
+}
+
+// 中央スクリーンのタッチ
+const touchScreen = (x, y) => {
+    const fx = Math.floor(x)
+    const fy = Math.floor(y)
+
+    playerPut(turn, fx, fy)
+}
+
+// 初期化
+const init = () => {
+
+    const canvasSprite = document.createElement('canvas')
+    const contextSprite = canvasSprite.getContext('2d')
+    contextSprite.drawImage(sprite, 0, 0)
+    const pSize = canvasSprite.width * canvasSprite.height * 4
+
+    const pixel = contextSprite.getImageData(0, 0, canvasSprite.width, canvasSprite.height)
+    const srcData = []
+
+    // 元ピクセルデータを退避
+    for(let p = 0; p < pSize; p++) {
+        srcData[p] = pixel.data[p]
+    }
+
+    // 色変換
+    for(let c = 0; c < 6; c++) {
+        for(let l = 0; l < 3; l++) {
+            for(let p = 0; p < pSize; p += 4) {
+                let d = false
+                if(
+                    srcData[p + 0] === 255 &&
+                    srcData[p + 1] === 255 &&
+                    srcData[p + 2] === 255 &&
+                    srcData[p + 3] === 255
+                ) d = true
+
+                if(!d) {
+                    pixel.data[p + 0] = 0
+                    pixel.data[p + 1] = 0
+                    pixel.data[p + 2] = 0
+                    pixel.data[p + 3] = 0
+                } else {
+                    pixel.data[p + 0] = colorArray[c][l][0]
+                    pixel.data[p + 1] = colorArray[c][l][1]
+                    pixel.data[p + 2] = colorArray[c][l][2]
+                    pixel.data[p + 3] = colorArray[c][l][3]
+                }
+            }
+            contextSprite.putImageData(pixel, 0, 0)
+            colorSprite[c][l].src = canvasSprite.toDataURL('image/png')
+        }
+    }
+
+    gameInit()
+
+    requestAnimationFrame(animationFrame)
+}
+
+// クリックとタッチをまとめる
+screenCanvas.addEventListener('mousedown', (event) => {
+    const o = event.target.getBoundingClientRect()
+    touchScreen(
+        (event.clientX - o.left) / o.width * 8,
+        (event.clientY - o.top) / o.height * 8)
+})
+screenCanvas.addEventListener('touchstart', (event) => {
+    const o = event.target.getBoundingClientRect()
+    touchScreen(
+        (event.touches[0].pageX - o.left) / o.width * 8,
+        (event.touches[0].pageY - o.top) / o.height * 8)
+})
+playerBCanvas.addEventListener('mousedown', (event) => {
+    const o = event.target.getBoundingClientRect()
+    touchPlayer('b',
+        (o.right - event.clientX) / o.width * 4,
+        (o.bottom - event.clientY) / o.height * 1)
+})
+playerBCanvas.addEventListener('touchstart', (event) => {
+    const o = event.target.getBoundingClientRect()
+    touchPlayer('b',
+        (o.right - event.touches[0].pageX) / o.width * 4,
+        (o.bottom - event.touches[0].pageY) / o.height * 1)
+})
+playerACanvas.addEventListener('mousedown', (event) => {
+    const o = event.target.getBoundingClientRect()
+    touchPlayer('a',
+        (event.clientX - o.left) / o.width * 4,
+        (event.clientY - o.top) / o.height * 1)
+})
+playerACanvas.addEventListener('touchstart', (event) => {
+    const o = event.target.getBoundingClientRect()
+    touchPlayer('a',
+        (event.touches[0].pageX - o.left) / o.width * 4,
+        (event.touches[0].pageY - o.top) / o.height * 1)
+})
+
+
+// ボタン以外タッチ禁止
+const preventDefault = (event) => {
+    event.preventDefault()
+}
+
+// 音声開始
+body.addEventListener('click', (event) => {
+    audioStart()
+
+    if(player.a.state === 'title') {
+        for(let p in player) {
+            player[p].state = 'select'
+            palyerSelect(p)
+        }
+        redraw = true
+    }
+
+    body.addEventListener('mousedown', preventDefault)
+    body.addEventListener('mousemove', preventDefault)
+    body.addEventListener('mouseup', preventDefault)
+    body.addEventListener('touchstart', preventDefault)
+    body.addEventListener('touchmove', preventDefault)
+    body.addEventListener('touchend', preventDefault)
+})
+
+// 画像読み込み監視
+sprite.addEventListener('load', (event) => {
+    init()
+})
+        </script>
+    </body>
+</html>
