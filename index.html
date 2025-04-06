@@ -6,7 +6,7 @@
             name="viewport"
             content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0"
         >
-        <title>カラフルリバーシ 1.0.1</title>
+        <title>カラフルリバーシ 1.0.3</title>
 	    <link rel="icon" href="icon.png">
         <style>
 
@@ -548,6 +548,7 @@ const drawDynamicBoard = () => {
             }
         }
     }
+    sound(turn, 2)
 }
 
 const drawCount = (f) => {
@@ -556,7 +557,7 @@ const drawCount = (f) => {
         const x = Math.floor(b % 8)
         const y = Math.floor(b / 8)
         let s = f - b + 1
-        if(s < 8) drawChar(player.b.color, 1, 'screen',
+        if(0 < s && s < 8) drawChar(player.b.color, 1, 'screen',
             s,
             player.b.shape,
             x,
@@ -568,7 +569,7 @@ const drawCount = (f) => {
         const x = 7 - Math.floor(a % 8)
         const y = 7 - Math.floor(a / 8)
         let s = f - a + 1
-        if(s < 8) drawChar(player.a.color, 1, 'screen',
+        if(0 < s && s < 8) drawChar(player.a.color, 1, 'screen',
             s,
             player.a.shape,
             x,
@@ -641,7 +642,7 @@ const draw = () =>
     // スクリーンの背景
     context.screen.globalCompositeOperation = 'source-over'
     if(player.a.state !== 'title') drawBack('screen', 0, 0, 0, '100%')
-    else drawBack('screen', 51, 51, 51, '100%')
+    else drawBack('screen', 204, 204, 204, '100%')
 
     // 加算合成でキャラを描く
     context.screen.globalCompositeOperation = 'lighter'
@@ -716,13 +717,12 @@ const animationFrame = (timestamp) =>
     // アニメーションしてから相手のターンへ渡す
     if (end.frame >= 0) {
         end.prevFrame = end.frame
-        end.frame += 12 * deltaTime
+        end.frame += 8 * deltaTime
         if(Math.floor(end.frame) !== Math.floor(end.prevFrame)) {
-            sound(turn, 2)
             redraw = true
         }
     }
-    const m = 7 + end.rMax
+    const m = 8 + end.rMax
     if (end.frame >= m) {
         let p = turn
         let q = (p === 'a')? 'b' : 'a'
@@ -757,7 +757,7 @@ const animationFrame = (timestamp) =>
             redraw = true
         }
     }
-    if (count.frame >= Math.max(count.a, count.b) + 7) {
+    if (count.frame >= Math.max(count.a, count.b) + 16) {
         count.frame = -1
         count.prevFrame = -1
         player.b.state = 'result'
@@ -818,6 +818,8 @@ const calcToPut = () => {
 
 // 最後に駒を数える関数
 const playerCount = () => {
+    count.b = 0
+    count.a = 0
     for(let y = 0; y < 8; y++) {
         for(let x = 0; x < 8; x++) {
             if(board.player[y][x] === 'b') count.b++
@@ -985,9 +987,9 @@ const palyerSelect = (p) => {
     ]
 
     player[p].sound[0] = noteArray[c + 0]
-    player[p].sound[1] = noteArray[c + 1]
-    player[p].sound[2] = noteArray[c + 2]
-    player[p].sound[3] = noteArray[c + 3]
+    player[p].sound[1] = noteArray[c + 2]
+    player[p].sound[2] = noteArray[c + 4]
+    player[p].sound[3] = noteArray[c + 6]
 
     sound(p, 3)
 }
