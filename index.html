@@ -6,8 +6,9 @@
             name="viewport"
             content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0"
         >
-        <title>カラフルリバーシ 1.0.3</title>
-	    <link rel="icon" href="icon.png">
+        <title>カラフルリバーシ 1.0.4</title>
+	    <link rel="icon" href="/icon.png">
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
         <style>
 
 /* 横長 */
@@ -45,7 +46,7 @@
 
 canvas {
     image-rendering: pixelated;
-    border-radius: 0.5em;
+    border-radius: calc(100% / 32);
     width: 100%;
     height: auto;
     display: block;
@@ -78,6 +79,7 @@ body, html
     margin: 0;
     padding: 0;
     font-family: sans-serif;
+    font-size: 12pt;
     line-height: 1em;
     box-sizing: border-box;
     touch-action: manipulation;
@@ -622,14 +624,42 @@ const drawEnd = (p) => {
         1.5,
         0
     )
-    sound(p, 4)
+    sound(p, 3)
 }
 
 const drawSelect = (p) => {
+    const q = (p === 'a')? 'b' : 'a'
+
     drawChar(player[p].color, 1, p,
         4,
         player[p].shape,
         1.5,
+        0
+    )
+
+    // 左の形選択ボタン
+    let s1 = player[p].shape
+    s1++
+    if(s1 >= 8) s1 = 0
+    if(s1 === player[q].shape) s1++
+    if(s1 >= 8) s1 = 0
+    drawChar(player[p].color, 2, p,
+        4,
+        s1,
+        0,
+        0
+    )
+
+    // 右の色選択ボタン
+    let c1 = player[p].color
+    c1++
+    if(c1 >= 6) c1 = 0
+    if(c1 === player[q].color) c1++
+    if(c1 >= 6) c1 = 0
+    drawChar(c1, 2, p,
+        4,
+        player[p].shape,
+        3,
         0
     )
 }
@@ -948,22 +978,20 @@ const playerPut = (p, x, y) => {
     player[p].state = 'end'
 }
 
-const palyerSelect = (p) => {
-    const q = (p === 'a')? 'b' : 'a'
-    let s = Math.floor(Math.random() * 7)
-    let c = Math.floor(Math.random() * 5)
-    if (s >= player[q].shape) s++
-    if (c >= player[q].color) c++
-    player[p].shape = s
-    player[p].color = c
+// 音再計算
+const recalcSound = (p) => {
+    const s = player[p].shape
+    const c = player[p].color
 
-    const real = new Float32Array(9)
-    const imag = new Float32Array(9)
+    const real = new Float32Array(5)
+    const imag = new Float32Array(5)
     real[0] = 0
     imag[0] = 0
+    real[1] = 1
+    imag[0] = 0
     for(let i = 0; i < 8; i++) {
-        real[i + 1] = (i + 1 < s + 2)? 1 : 0 
-        imag[i + 1] = 0
+        real[i + 2] = (s >> i) & 1 
+        imag[i + 2] = 0
     }
     const wave = audioContext.createPeriodicWave(real, imag)
     let pn = (p === 'a')? 0 : 1
@@ -990,7 +1018,19 @@ const palyerSelect = (p) => {
     player[p].sound[1] = noteArray[c + 2]
     player[p].sound[2] = noteArray[c + 4]
     player[p].sound[3] = noteArray[c + 6]
+}
 
+// 最初のランダムな駒選択
+const palyerSelect = (p) => {
+    const q = (p === 'a')? 'b' : 'a'
+    let s = Math.floor(Math.random() * 7)
+    let c = Math.floor(Math.random() * 5)
+    if (s >= player[q].shape) s++
+    if (c >= player[q].color) c++
+    player[p].shape = s
+    player[p].color = c
+
+    recalcSound(p)
     sound(p, 3)
 }
 
@@ -1002,15 +1042,30 @@ const touchPlayer = (p, x, y) => {
 
     // 駒決定
     if (player[p].state === 'select' &&
-        1.5 <= x && x < 2.5 &&
-        0 <= y && y < 1) {
+        1.5 <= x && x < 2.5) {
         player[p].state = 'start'
         redraw = true
     } else
 
-    // 駒選択
-    if(player[p].state === 'select') {
-        palyerSelect(p)
+    // 駒の形選択
+    if(player[p].state === 'select' &&
+        0 <= x && x < 1) {
+        player[p].shape = (player[p].shape + 1) % 8
+        if(player[p].shape === player[q].shape)
+            player[p].shape = (player[p].shape + 1) % 8
+        recalcSound(p)
+        sound(p, 3)
+        redraw = true
+    } else
+
+    // 駒の色選択
+    if(player[p].state === 'select' &&
+        3 <= x && x < 4) {
+        player[p].color = (player[p].color + 1) % 6
+        if(player[p].color === player[q].color)
+            player[p].color = (player[p].color + 1) % 6
+        recalcSound(p)
+        sound(p, 3)
         redraw = true
     } else
 
@@ -1136,6 +1191,7 @@ const preventDefault = (event) => {
 
 // 音声開始
 body.addEventListener('click', (event) => {
+    event.preventDefault()
     audioStart()
 
     if(player.a.state === 'title') {
