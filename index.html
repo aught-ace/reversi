@@ -6,7 +6,7 @@
             name="viewport"
             content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0"
         >
-        <title>カラフルリバーシ 1.0.0</title>
+        <title>カラフルリバーシ 1.0.1</title>
 	    <link rel="icon" href="icon.png">
         <style>
 
@@ -189,8 +189,8 @@ const audioStart = () =>
 
     for(let p = 0; p < 2; p++) {
         gainNode[p].gain.linearRampToValueAtTime(0, audioContext.currentTime)
-        gainNode[p].gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.001)
-        gainNode[p].gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.02 - 0.001)
+        gainNode[p].gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.001)
+        gainNode[p].gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.02 - 0.001)
         gainNode[p].gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.02)
     }
 }
