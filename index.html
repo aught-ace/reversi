@@ -6,7 +6,7 @@
             name="viewport"
             content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0"
         >
-        <title>カラフルリバーシ 1.0.5</title>
+        <title>カラフルリバーシ 1.0.6</title>
 	    <link rel="icon" href="./icon.png">
         <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
         <style>
@@ -643,7 +643,7 @@ const drawSelect = (p) => {
     if(s1 >= 8) s1 = 0
     if(s1 === player[q].shape) s1++
     if(s1 >= 8) s1 = 0
-    drawChar(player[p].color, 2, p,
+    drawChar(player[p].color, 0, p,
         4,
         s1,
         0,
@@ -656,7 +656,7 @@ const drawSelect = (p) => {
     if(c1 >= 6) c1 = 0
     if(c1 === player[q].color) c1++
     if(c1 >= 6) c1 = 0
-    drawChar(c1, 2, p,
+    drawChar(c1, 0, p,
         4,
         player[p].shape,
         3,
@@ -672,7 +672,7 @@ const draw = () =>
     // スクリーンの背景
     context.screen.globalCompositeOperation = 'source-over'
     if(player.a.state !== 'title') drawBack('screen', 0, 0, 0, '100%')
-    else drawBack('screen', 204, 204, 204, '100%')
+    else drawBack('screen', 0, 0, 0, '100%')
 
     // 加算合成でキャラを描く
     context.screen.globalCompositeOperation = 'lighter'
